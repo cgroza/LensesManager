@@ -7,7 +7,7 @@ import qualified Data.Map as M
 import Data.Maybe
 
 
-data GUI = GUI {lensesView :: IconView, lensesStore :: ListStore (String, Pixbuf)}
+data GUI = GUI {lensesView :: IconView, lensesStore :: ListStore (String, Pixbuf), editWindow :: Window}
 
 populateIconView :: GUI -> IO ()
 populateIconView gui = do     
@@ -18,24 +18,32 @@ populateIconView gui = do
 
 
 showEditWindow :: GUI -> IO ()
-showEditWindow GUI {lensesView = lview, lensesStore = lstore} = do
-  selected <- treeRowReferenceNew lstore . head =<< iconViewGetSelectedItems lview 
-  case selected of
-    Just treeRef -> do val <- listStoreGetValue lstore . head =<< treeRowReferenceGetPath treeRef
-                       print $ fst val
-    Nothing -> return ()
-  
+showEditWindow GUI {lensesView = lview, lensesStore = lstore, editWindow = ewin} = do
+  selected <- iconViewGetSelectedItems lview 
+  if not $ null selected then do
+    itemRef <- treeRowReferenceNew lstore . head =<< iconViewGetSelectedItems lview 
+    case itemRef of
+      Just treeRef -> do val <- listStoreGetValue lstore . head =<< treeRowReferenceGetPath treeRef
+                         print $ fst val
+                         widgetShowAll $ ewin
+      Nothing -> return ()
+  else return ()
 
 main = 
   do
     initGUI
     Just xml <- xmlNew "GUI.glade"
-    window   <- xmlGetWidget xml castToWindow "top_window"
+    Just editWinXml <- xmlNew  "EditWindow.glade"
 
+    editWindow  <- xmlGetWidget editWinXml castToWindow "edit_window"
+    editWinOkBt <- xmlGetWidget editWinXml castToButton "ok_button"
+    onClicked editWinOkBt $ widgetHideAll editWindow
+
+    window <- xmlGetWidget xml castToWindow "top_window"
     widgetSetSizeRequest window 300 350
     onDestroy window mainQuit
 
-  -- setup the icon view
+    -- setup the icon view
     lensesView <- xmlGetWidget xml castToIconView "lenses_view"
     storeSource <- listStoreNew ([] :: [(String, Pixbuf)]) 
     treeModelSetColumn storeSource (makeColumnIdString 1) fst
@@ -45,7 +53,7 @@ main =
     iconViewSetPixbufColumn lensesView (makeColumnIdPixbuf 2)
     iconViewSetModel lensesView (Just storeSource)
 
-    let gui = GUI lensesView storeSource
+    let gui = GUI lensesView storeSource editWindow
 
     editButton <- xmlGetWidget xml castToButton "edit_button"
     onClicked editButton $ showEditWindow gui
