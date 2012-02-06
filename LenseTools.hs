@@ -23,33 +23,26 @@ changeLens = M.insert
 writeLens :: Lens -> IO ()
 writeLens lens = do
   content <- readFile path
-  let modified = foldl changeLensTxt content $ M.toList lens
-  print modified
-  writeFile path modified
-  where 
-    path = getField Path lens
-    changeLensTxt lensTxt (field, val) =
-      let regex = mkRegex $ "^" ++ show field ++ ".*=.*$" in 
-      subRegex regex lensTxt (show field ++ "=" ++ val)
-
+  writeFile path $ foldl changeLensTxt content $ M.toList lens
+  where path = getField Path lens
+        changeLensTxt lensTxt (field, val) =
+          let regex = mkRegex $ "^" ++ show field ++ ".*=.*$" in 
+          subRegex regex lensTxt (show field ++ "=" ++ val)
 
 readAttr :: String -> Field -> Value
-readAttr txt field = 
-  case matchRegexAll regex txt of
-    Just (_, s, _, _) -> if not $ null s then  
-                splitRegex (mkRegex "=") ( s) !! 1
-              else ""
-    Nothing ->  ""
+readAttr txt field =  case matchRegexAll regex txt of
+  Just (_, s, _, _) -> if not $ null s then  
+                         splitRegex (mkRegex "=") ( s) !! 1
+                       else ""
+  Nothing ->  ""
   where regex = mkRegex $ "^" ++ show field ++ ".*=.*$"
 
 getLens :: FilePath -> IO [Lens]
 getLens filePath = (mapM readLens . map ((lensDir </>) . (filePath </>)) . filter isLens) =<< (getDirectoryContents (lensDir </> filePath))
   where fields = [Icon , Name , Description , SearchHint , Shortcut , Visible]
         isLens = isSuffixOf ".lens" 
-        readLens :: FilePath -> IO Lens
-        readLens file = do
-          contents <- readFile file
-          return $ M.insert Path file $ M.fromList $ zip fields $ map (readAttr contents) fields 
+        readLens file = do contents <- readFile file
+                           return $ M.insert Path file $ M.fromList $ zip fields $ map (readAttr contents) fields 
           
 getField :: Field -> Lens -> Value
 getField f = fromMaybe "" . M.lookup f

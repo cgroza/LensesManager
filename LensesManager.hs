@@ -59,13 +59,11 @@ closeSaveEditLensWin appData EditEntries { descriptionEntry = dentry, nameEntry 
         descriptionVal <- entryGetText dentry
         hintVal <- entryGetText hentry
         shortcutVal <- entryGetText sentry
-        visibleVal <- return . show =<< toggleButtonGetActive vcheck
+        visibleVal <- return . map toLower . show =<< toggleButtonGetActive vcheck
         iconPathVal <- return . fromJust  =<< fileChooserGetFilename ichooser
     
         newLens <- return $ foldl (\l (f, v) -> changeLens f v l ) lens $ zip [Name, Description, SearchHint, Shortcut, Visible, LenseTools.Icon]  
                       [nameVal, descriptionVal, hintVal, shortcutVal, visibleVal, iconPathVal]
-
-        mapM_ print $M.elems newLens
         writeLens newLens
         writeIORef (lensData appData) =<< getAllLens
 
