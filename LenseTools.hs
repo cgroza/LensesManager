@@ -7,6 +7,7 @@ import System.IO
 import Text.Regex
 import Data.List
 import Data.Maybe
+import Data.List
 import qualified Data.Map as M
 
 type Lens = M.Map Field Value
@@ -16,14 +17,24 @@ type Value = String
 
 lensDir = "/usr/share/unity/lenses"
 
-changeLens :: Lens -> Field -> Value -> IO ()
-changeLens lens field val = do
-  writeFile path . flip (subRegex regex)  (show field ++ "=" ++val) =<< IOS.readFile path
-  where regex = mkRegex $ "^" ++ show field ++ ".*=.*$"
-        path = fromJust $ M.lookup Path lens
+changeLens :: Field -> Value -> Lens -> Lens
+changeLens = M.insert
 
-getAttr :: String -> Field -> Value
-getAttr txt field = 
+writeLens :: Lens -> IO ()
+writeLens lens = do
+  content <- readFile path
+  let modified = foldl changeLensTxt content $ M.toList lens
+  print modified
+  writeFile path modified
+  where 
+    path = getField Path lens
+    changeLensTxt lensTxt (field, val) =
+      let regex = mkRegex $ "^" ++ show field ++ ".*=.*$" in 
+      subRegex regex lensTxt (show field ++ "=" ++ val)
+
+
+readAttr :: String -> Field -> Value
+readAttr txt field = 
   case matchRegexAll regex txt of
     Just (_, s, _, _) -> if not $ null s then  
                 splitRegex (mkRegex "=") ( s) !! 1
@@ -38,11 +49,14 @@ getLens filePath = (mapM readLens . map ((lensDir </>) . (filePath </>)) . filte
         readLens :: FilePath -> IO Lens
         readLens file = do
           contents <- readFile file
-          return $ M.insert Path file $ M.fromList $ zip fields $ map (getAttr contents) fields 
+          return $ M.insert Path file $ M.fromList $ zip fields $ map (readAttr contents) fields 
           
+getField :: Field -> Lens -> Value
+getField f = fromMaybe "" . M.lookup f
 
 getAllLens :: IO [Lens]
 getAllLens = return . concat =<< mapM getLens =<< getDirectoryContents lensDir
 
-
-
+getLensByName :: String -> [Lens] -> Lens
+getLensByName name lens = lens !! (fromJust $ findIndex ((name ==) . fromMaybe "" . M.lookup Name) lens)
+  
