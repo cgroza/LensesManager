@@ -17,6 +17,7 @@ data EditEntries = EditEntries {nameEntry :: Entry, descriptionEntry :: Entry, s
 
 populateIconView :: AppData -> IO ()
 populateIconView gui = do     
+  listStoreClear $ lensesStore gui
   mapM_ (addIcon (lensesStore gui)) =<< readIORef (lensData gui)
   where addIcon lstore lens = do  
           p <- pixbufNewFromFile $ fromJust $ M.lookup LenseTools.Icon lens
@@ -66,7 +67,7 @@ closeSaveEditLensWin appData EditEntries { descriptionEntry = dentry, nameEntry 
                       [nameVal, descriptionVal, hintVal, shortcutVal, visibleVal, iconPathVal]
         writeLens newLens
         writeIORef (lensData appData) =<< getAllLens
-
+        populateIconView appData
 main = 
   do
     initGUI

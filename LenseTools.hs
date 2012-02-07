@@ -2,6 +2,7 @@ module LenseTools  where
 
 import System.Directory
 import System.FilePath.Posix
+import System.Directory
 import qualified System.IO.Strict as IOS
 import System.IO
 import Text.Regex
@@ -22,12 +23,19 @@ changeLens = M.insert
 
 writeLens :: Lens -> IO ()
 writeLens lens = do
-  content <- readFile path
-  writeFile path $ foldl changeLensTxt content $ M.toList lens
+  content <- IOS.readFile path
+  writeFile tempPath $ foldl changeLensTxt content $ M.toList $ M.delete Path lens
+  copyFile tempPath path
+  removeFile tempPath
   where path = getField Path lens
+        tempPath = addExtension path "lmng"
         changeLensTxt lensTxt (field, val) =
-          let regex = mkRegex $ "^" ++ show field ++ ".*=.*$" in 
-          subRegex regex lensTxt (show field ++ "=" ++ val)
+          let regex = mkRegex $ "^" ++ show field ++ ".*=.*$" 
+              replacement = show field ++ "=" ++ val in 
+          if isNothing $ matchRegexAll regex lensTxt then
+            subRegex (mkRegex "^\\[Desktop Entry\\]") lensTxt (replacement ++ "\n[Desktop Entry]")
+          else
+            subRegex regex lensTxt replacement
 
 readAttr :: String -> Field -> Value
 readAttr txt field =  case matchRegexAll regex txt of
@@ -41,7 +49,7 @@ getLens :: FilePath -> IO [Lens]
 getLens filePath = (mapM readLens . map ((lensDir </>) . (filePath </>)) . filter isLens) =<< (getDirectoryContents (lensDir </> filePath))
   where fields = [Icon , Name , Description , SearchHint , Shortcut , Visible]
         isLens = isSuffixOf ".lens" 
-        readLens file = do contents <- readFile file
+        readLens file = do contents <- IOS.readFile file
                            return $ M.insert Path file $ M.fromList $ zip fields $ map (readAttr contents) fields 
           
 getField :: Field -> Lens -> Value
