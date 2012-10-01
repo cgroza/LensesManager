@@ -45,13 +45,16 @@ readAttr txt field =  case matchRegexAll regex txt of
   Nothing ->  ""
   where regex = mkRegex $ "^" ++ show field ++ ".*=.*$"
 
+readLens :: FilePath -> IO Lens
+readLens file = do contents <- IOS.readFile file
+                   return $ M.insert Path file $ M.fromList $ zip fields $ map 
+                     (readAttr contents) fields 
+                     where fields = [Icon , Name , Description , SearchHint , Shortcut , Visible]
+
 getLens :: FilePath -> IO [Lens]
 getLens filePath = (mapM readLens . map ((lensDir </>) . (filePath </>)) . filter isLens) =<< (getDirectoryContents (lensDir </> filePath))
-  where fields = [Icon , Name , Description , SearchHint , Shortcut , Visible]
-        isLens = isSuffixOf ".lens" 
-        readLens file = do contents <- IOS.readFile file
-                           return $ M.insert Path file $ M.fromList $ zip fields $ map (readAttr contents) fields 
-          
+  where isLens = isSuffixOf ".lens" 
+
 getField :: Field -> Lens -> Value
 getField f = fromMaybe "" . M.lookup f
 
