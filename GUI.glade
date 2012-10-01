@@ -33,7 +33,7 @@
                 <property name="can_focus">False</property>
                 <property name="left_padding">319</property>
                 <child>
-                  <widget class="GtkFileChooserButton" id="filechooserbutton1">
+                  <widget class="GtkFileChooserButton" id="open_button">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                   </widget>

@@ -8,7 +8,7 @@ import Data.Maybe
 import Data.IORef
 import Data.Char
 
-data AppData = AppData {lensesView :: IconView, lensesStore :: ListStore (String, Pixbuf), 
+data AppData = AppData {openButton :: FileChooserButton, lensesView :: IconView, lensesStore :: ListStore (String, Pixbuf), 
                         editWindow :: Window, lensData :: IORef [Lens]}
 
 data EditEntries = EditEntries {nameEntry :: Entry, descriptionEntry :: Entry, shortcutEntry :: Entry,
@@ -34,12 +34,20 @@ getSelectedLens AppData {lensesView = lview, lensData = ldata, lensesStore = lst
       Nothing -> return Nothing
   else return Nothing
 
-showEditWindow :: AppData -> EditEntries -> IO ()
-showEditWindow appData@(AppData {editWindow = ewin})
+
+onEditButton :: AppData -> EditEntries -> IO ()
+onEditButton appData editEntries  = showEditWindow appData getSelectedLens
+                                    editEntries
+
+onOpenButton :: AppData -> IO ()
+onOpenButton = undefined
+
+showEditWindow :: AppData -> (AppData -> IO (Maybe Lens)) -> EditEntries -> IO ()
+showEditWindow appData@(AppData {editWindow = ewin}) lensGetter
                EditEntries { descriptionEntry = dentry, nameEntry = nentry, shortcutEntry = sentry, 
                              hintEntry = hentry, visibleCheckButton = vcheck, iconFileChooser = ichooser}
   = do
-  selected <- getSelectedLens appData
+  selected <- lensGetter appData
   case selected of
     Just selectedLens -> do
       entrySetText nentry $ getField Name selectedLens
@@ -77,6 +85,8 @@ main =
     editWindow  <- xmlGetWidget editWinXml castToWindow "edit_window"
     windowSetDeletable editWindow False
 
+    openButton <- xmlGetWidget xml castToFileChooserButton "open_button"
+
     nameEntry <- xmlGetWidget editWinXml castToEntry "name_txt"
     shortcutEntry <- xmlGetWidget editWinXml castToEntry "shortcut_txt"
     descriptionEntry <- xmlGetWidget editWinXml castToEntry "description_txt"
@@ -100,11 +110,13 @@ main =
 
     lensData <- newIORef =<< getAllLens
 
-    let gui = AppData lensesView storeSource editWindow lensData
+    let gui = AppData openButton lensesView storeSource editWindow lensData
     let editEntries = EditEntries nameEntry descriptionEntry shortcutEntry hintEntry visibilityCheck iconChooser 
 
+    afterFileActivated openButton $ onOpenButton gui
+
     editButton <- xmlGetWidget xml castToButton "edit_button"
-    onClicked editButton $ showEditWindow gui editEntries
+    onClicked editButton $ onEditButton gui editEntries
 
     okButton <- xmlGetWidget xml castToButton "ok_button"
     onClicked okButton mainQuit
