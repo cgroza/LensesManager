@@ -33,9 +33,12 @@
                 <property name="can_focus">False</property>
                 <property name="left_padding">319</property>
                 <child>
-                  <widget class="GtkFileChooserButton" id="open_button">
+                  <widget class="GtkButton" id="open_button">
+                    <property name="label" translatable="yes">Open</property>
                     <property name="visible">True</property>
-                    <property name="can_focus">False</property>
+                    <property name="can_focus">True</property>
+                    <property name="receives_default">True</property>
+                    <property name="use_action_appearance">False</property>
                   </widget>
                 </child>
               </widget>

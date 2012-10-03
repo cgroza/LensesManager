@@ -8,12 +8,13 @@ import Data.Maybe
 import Data.IORef
 import Data.Char
 
-data AppData = AppData {openButton :: FileChooserButton, lensesView :: IconView, lensesStore :: ListStore (String, Pixbuf), 
+data AppData = AppData {openButton :: Button, lensesView :: IconView, 
+                        lensesStore :: ListStore (String, Pixbuf),
                         editWindow :: Window, lensData :: IORef [Lens]}
 
 data EditEntries = EditEntries {nameEntry :: Entry, descriptionEntry :: Entry, shortcutEntry :: Entry,
                                 hintEntry :: Entry, visibleCheckButton :: CheckButton, 
-                                iconFileChooser :: FileChooserButton}
+                                iconFileChooser :: FileChooserButton, lensLabel :: Label}
 
 populateIconView :: AppData -> IO ()
 populateIconView gui = do     
@@ -24,55 +25,83 @@ populateIconView gui = do
           listStoreAppend lstore (fromJust $ M.lookup Name lens , p)
 
 getSelectedLens :: AppData -> IO (Maybe Lens)
-getSelectedLens AppData {lensesView = lview, lensData = ldata, lensesStore = lstore} = do
-  selected <- iconViewGetSelectedItems lview 
-  if not $ null selected then do
-    itemRef <- treeRowReferenceNew lstore . head =<< iconViewGetSelectedItems lview 
-    case itemRef of
-      Just treeRef -> do val <- listStoreGetValue lstore . head =<< treeRowReferenceGetPath treeRef
-                         return  . Just . (getLensByName (fst val)) =<< readIORef ldata
-      Nothing -> return Nothing
-  else return Nothing
+getSelectedLens AppData {lensesView = lview, lensData = ldata, 
+                         lensesStore = lstore} =
+  do
+    selected <- iconViewGetSelectedItems lview 
+    if not $ null selected then do
+      itemRef <- treeRowReferenceNew lstore . head =<< iconViewGetSelectedItems 
+                                                                          lview
+      case itemRef of
+        Just treeRef -> do val <- listStoreGetValue lstore . head =<< 
+                                  treeRowReferenceGetPath treeRef
+                           return  . Just . (getLensByName (fst val)) =<<
+                             readIORef ldata
+        Nothing -> return Nothing
+      else return Nothing
 
+getLensFromFile :: AppData -> IO (Maybe Lens)
+getLensFromFile _ = do
+  fileDlg <- fileChooserDialogNew Nothing Nothing FileChooserActionOpen
+             [("Open", ResponseAccept), ("Cancel", ResponseCancel)]
+  widgetShow fileDlg
+  response <- dialogRun fileDlg
+  case response of
+    ResponseAccept -> do let lens = (return . Just =<< (readLens . fromJust =<< 
+                                          (fileChooserGetFilename fileDlg)))
+                         widgetDestroy fileDlg
+                         lens
+    ResponseCancel -> widgetDestroy fileDlg >> return Nothing
 
 onEditButton :: AppData -> EditEntries -> IO ()
 onEditButton appData editEntries  = showEditWindow appData getSelectedLens
                                     editEntries
 
-onOpenButton :: AppData -> IO ()
-onOpenButton = undefined
+onOpenButton :: AppData -> EditEntries -> IO ()
+onOpenButton appData@(AppData {openButton = fileChooser}) editEntries =
+     showEditWindow appData getLensFromFile editEntries
 
 showEditWindow :: AppData -> (AppData -> IO (Maybe Lens)) -> EditEntries -> IO ()
 showEditWindow appData@(AppData {editWindow = ewin}) lensGetter
-               EditEntries { descriptionEntry = dentry, nameEntry = nentry, shortcutEntry = sentry, 
-                             hintEntry = hentry, visibleCheckButton = vcheck, iconFileChooser = ichooser}
-  = do
-  selected <- lensGetter appData
-  case selected of
-    Just selectedLens -> do
-      entrySetText nentry $ getField Name selectedLens
-      entrySetText dentry $ getField Description selectedLens
-      entrySetText sentry $ getField Shortcut selectedLens
-      entrySetText hentry $ getField SearchHint selectedLens
-      fileChooserSetFilename ichooser $ getField LenseTools.Icon selectedLens
-      toggleButtonSetActive vcheck $ (map toLower $ getField Visible selectedLens) `elem` ["","true"]
-      widgetShowAll $ ewin
-    Nothing -> return ()
+               EditEntries { descriptionEntry = dentry, nameEntry = nentry, 
+                             shortcutEntry = sentry, hintEntry = hentry, 
+                             visibleCheckButton = vcheck, 
+                             iconFileChooser = ichooser, lensLabel = llabel} =
+                 do selected <- lensGetter appData
+                    case selected of
+                      Just selectedLens -> do
+                        labelSetText llabel $ getField Path selectedLens
+                        entrySetText nentry $ getField Name selectedLens
+                        entrySetText dentry $ getField Description selectedLens
+                        entrySetText sentry $ getField Shortcut selectedLens
+                        entrySetText hentry $ getField SearchHint selectedLens
+                        fileChooserSetFilename ichooser $ getField 
+                                                    LenseTools.Icon selectedLens
+                        toggleButtonSetActive vcheck $ (map toLower $ getField 
+                                        Visible selectedLens) `elem` ["","true"]
+                        widgetShowAll $ ewin
+                      Nothing -> return ()
 
 closeSaveEditLensWin :: AppData -> EditEntries -> IO ()
-closeSaveEditLensWin appData EditEntries { descriptionEntry = dentry, nameEntry = nentry, shortcutEntry = sentry, 
-                                       hintEntry = hentry, visibleCheckButton = vcheck, iconFileChooser = ichooser}
+closeSaveEditLensWin appData EditEntries { descriptionEntry = dentry, 
+                                           nameEntry = nentry, shortcutEntry = sentry, 
+                                           hintEntry = hentry, 
+                                           visibleCheckButton = vcheck, 
+                                           iconFileChooser = ichooser, 
+                                           lensLabel = llabel}
   = do  widgetHideAll $ editWindow appData
-        Just lens <- getSelectedLens appData
+        lens <- readLens =<< labelGetText llabel
         nameVal <- entryGetText nentry
         descriptionVal <- entryGetText dentry
         hintVal <- entryGetText hentry
         shortcutVal <- entryGetText sentry
-        visibleVal <- return . map toLower . show =<< toggleButtonGetActive vcheck
+        visibleVal <- return.map toLower . show =<< toggleButtonGetActive vcheck
         iconPathVal <- return . fromJust  =<< fileChooserGetFilename ichooser
-    
-        newLens <- return $ foldl (\l (f, v) -> changeLens f v l ) lens $ zip [Name, Description, SearchHint, Shortcut, Visible, LenseTools.Icon]  
-                      [nameVal, descriptionVal, hintVal, shortcutVal, visibleVal, iconPathVal]
+        newLens <- return $ foldl (\l (f, v) -> changeLens f v l ) lens $ zip 
+                   [Name, Description, SearchHint, Shortcut, Visible, 
+                    LenseTools.Icon]  
+                   [nameVal, descriptionVal, hintVal, shortcutVal, visibleVal, 
+                    iconPathVal]
         writeLens newLens
         writeIORef (lensData appData) =<< getAllLens
         populateIconView appData
@@ -85,14 +114,17 @@ main =
     editWindow  <- xmlGetWidget editWinXml castToWindow "edit_window"
     windowSetDeletable editWindow False
 
-    openButton <- xmlGetWidget xml castToFileChooserButton "open_button"
+    openButton <- xmlGetWidget xml castToButton "open_button"
 
+    lensLabel <- xmlGetWidget editWinXml castToLabel "lens_label"
     nameEntry <- xmlGetWidget editWinXml castToEntry "name_txt"
     shortcutEntry <- xmlGetWidget editWinXml castToEntry "shortcut_txt"
     descriptionEntry <- xmlGetWidget editWinXml castToEntry "description_txt"
     hintEntry <- xmlGetWidget editWinXml castToEntry "hint_txt"
-    iconChooser <- xmlGetWidget editWinXml castToFileChooserButton "icon_chooser"
-    visibilityCheck <- xmlGetWidget editWinXml castToCheckButton "visible_checkbox"
+    iconChooser <- xmlGetWidget editWinXml castToFileChooserButton 
+                                                    "icon_chooser"
+    visibilityCheck <- xmlGetWidget editWinXml castToCheckButton 
+                                              "visible_checkbox"
 
     window <- xmlGetWidget xml castToWindow "top_window"
     widgetSetSizeRequest window 700 400
@@ -111,9 +143,10 @@ main =
     lensData <- newIORef =<< getAllLens
 
     let gui = AppData openButton lensesView storeSource editWindow lensData
-    let editEntries = EditEntries nameEntry descriptionEntry shortcutEntry hintEntry visibilityCheck iconChooser 
+    let editEntries = EditEntries nameEntry descriptionEntry shortcutEntry 
+                        hintEntry visibilityCheck iconChooser lensLabel
 
-    afterFileActivated openButton $ onOpenButton gui
+    onClicked openButton $ onOpenButton gui editEntries
 
     editButton <- xmlGetWidget xml castToButton "edit_button"
     onClicked editButton $ onEditButton gui editEntries
@@ -123,7 +156,6 @@ main =
 
     editWinOkBt <- xmlGetWidget editWinXml castToButton "ok_button"
     onClicked editWinOkBt (closeSaveEditLensWin gui editEntries)
-
 
     populateIconView gui
     widgetShowAll window

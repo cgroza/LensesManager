@@ -13,7 +13,8 @@ import qualified Data.Map as M
 
 type Lens = M.Map Field Value
 
-data Field = Icon | Name | Description | SearchHint | Shortcut | Visible | Path  deriving (Show, Eq, Ord)
+data Field = Icon | Name | Description | SearchHint | Shortcut | Visible | 
+             Path  deriving (Show, Eq, Ord)
 type Value = String
 
 lensDir = "/usr/share/unity/lenses"
@@ -24,7 +25,8 @@ changeLens = M.insert
 writeLens :: Lens -> IO ()
 writeLens lens = do
   content <- IOS.readFile path
-  writeFile tempPath $ foldl changeLensTxt content $ M.toList $ M.delete Path lens
+  writeFile tempPath $ foldl changeLensTxt content $ M.toList $ M.delete Path 
+                                                                         lens
   copyFile tempPath path
   removeFile tempPath
   where path = getField Path lens
@@ -33,7 +35,8 @@ writeLens lens = do
           let regex = mkRegex $ "^" ++ show field ++ ".*=.*$" 
               replacement = show field ++ "=" ++ val in 
           if isNothing $ matchRegexAll regex lensTxt then
-            subRegex (mkRegex "^\\[Desktop Entry\\]") lensTxt (replacement ++ "\n[Desktop Entry]")
+            subRegex (mkRegex "^\\[Desktop Entry\\]") lensTxt (replacement ++ 
+                                                            "\n[Desktop Entry]")
           else
             subRegex regex lensTxt replacement
 
@@ -49,10 +52,12 @@ readLens :: FilePath -> IO Lens
 readLens file = do contents <- IOS.readFile file
                    return $ M.insert Path file $ M.fromList $ zip fields $ map 
                      (readAttr contents) fields 
-                     where fields = [Icon , Name , Description , SearchHint , Shortcut , Visible]
+                     where fields = [Icon, Name, Description, SearchHint, 
+                                     Shortcut, Visible]
 
 getLens :: FilePath -> IO [Lens]
-getLens filePath = (mapM readLens . map ((lensDir </>) . (filePath </>)) . filter isLens) =<< (getDirectoryContents (lensDir </> filePath))
+getLens filePath = (mapM readLens . map ((lensDir </>) . (filePath </>)) . 
+                    filter isLens) =<< (getDirectoryContents (lensDir </> filePath))
   where isLens = isSuffixOf ".lens" 
 
 getField :: Field -> Lens -> Value
@@ -62,5 +67,6 @@ getAllLens :: IO [Lens]
 getAllLens = return . concat =<< mapM getLens =<< getDirectoryContents lensDir
 
 getLensByName :: String -> [Lens] -> Lens
-getLensByName name lens = lens !! (fromJust $ findIndex ((name ==) . fromMaybe "" . M.lookup Name) lens)
+getLensByName name lens = lens !! (fromJust $ findIndex ((name ==) . fromMaybe 
+                                                       "" . M.lookup Name) lens)
   
